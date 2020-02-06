@@ -47,9 +47,9 @@ namespace DebugPluginLocally
             //string projectdir = Directory.GetParent(Directory.GetCurrentDirectory()).Parent.FullName;
 
             //// get box.ipt absolute path
-            //string boxPath = System.IO.Path.Combine(projectdir, @"inputFiles\", "box.ipt");
+            //string boxPath = System.IO.Path.Combine(projectdir, @"Files\Workspaces\Workspace\Assemblies\Suspension", "Suspension.iam");
 
-            //string boxPathCopy = System.IO.Path.Combine(projectdir, @"inputFiles\", "boxcopy.ipt");
+            //string boxPathCopy = System.IO.Path.Combine(projectdir, @"Files\Workspaces\Workspace\Assemblies\Suspension", "Suspension_copy.iam");
 
             //try
             //{
@@ -80,9 +80,13 @@ namespace DebugPluginLocally
             // create an instance of UpdateBomPlugin
             UpdateBomPlugin.SampleAutomation plugin = new UpdateBomPlugin.SampleAutomation(app);
 
-            // run the plugin
-            plugin.Run(null);
+            /// IMPORTANT ///
+            /// You need to copy your dataset to this loocation: .\UpdateBom\DebugPluginLocally\bin\Debug
+            /// All Inventor documents must be closed before this action
+            /// 
 
+            // run the plugin
+            plugin.Run(null, "Suspension");
         }
     }
 }

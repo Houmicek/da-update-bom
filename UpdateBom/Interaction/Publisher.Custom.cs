@@ -23,7 +23,7 @@ namespace Interaction
                 public static readonly string Id = "UpdateBom";
                 public const string Label = "alpha";
 
-                public static readonly AppBundle Definition = new AppBundle
+                public static readonly AppBundle appBundle = new AppBundle
                 {
                     Engine = Engine,
                     Id = Id,
@@ -45,13 +45,13 @@ namespace Interaction
             }
         }
 
-
         /// <summary>
-        /// Get command line for activity.
+        /// Get command line for activity. 
+        /// Parameter is the name of IPJ file and must be the same as Assembly Name
         /// </summary>
         private static List<string> GetActivityCommandLine()
         {
-            return new List<string> { $"$(engine.path)\\InventorCoreConsole.exe /al $(appbundles[{Constants.Activity.Id}].path)" };
+            return new List<string> { $"$(engine.path)\\InventorCoreConsole.exe /al $(appbundles[{Constants.Bundle.Id}].path) Suspension" };
         }
 
         /// <summary>
@@ -67,17 +67,6 @@ namespace Interaction
                             {
                                 Verb = Verb.Get,
                                 Description = "Input assembly to extract parameters",
-                                LocalName = "inputFile",
-                                Zip = true
-                            }
-                        },
-                        {
-                            Constants.Parameters.inputParams,
-                            new Parameter
-                            {
-                                Verb = Verb.Get,
-                                Description = "Input json file tells what to load and from where",
-                                LocalName = "inputParams.json"
                             }
                         },
                        {
@@ -100,22 +89,25 @@ namespace Interaction
             // TODO: update the URLs below with real values
             return new Dictionary<string, IArgument>
                     {
-                    //    {
-                    //        Constants.Parameters.InventorDoc,
-                    //        new XrefTreeArgument
-                    //        {
-                    //            Url = "!!! CHANGE ME !!!"
-                    //        }
-                    //    },
-                    //    {
-                    //        Constants.Parameters.OutputIpt,
-                    //        new XrefTreeArgument
-                    //        {
-                    //            Verb = Verb.Put,
-                    //            Url = "!!! CHANGE ME !!!"
-                    //        }
-                    //    }
-                    };
+                    {
+                        Constants.Parameters.inputFile,
+                        new XrefTreeArgument
+                        {
+                            Url = "https://inventor-io-samples.s3.us-west-2.amazonaws.com/holecep/bom/Suspension.zip?AWSAccessKeyId=AKIAINFJUJXZQ3REAW2A&Expires=1586530080&Signature=c3IkIyq4XnL1D0QZeVcit2thhfE%3D",
+                            PathInZip = "Workspaces/Workspace/Assemblies/Suspension/Suspension.iam",
+                            LocalName = "Asm"
+
+                        }
+                    },
+                    {
+                        Constants.Parameters.outputFile,
+                        new XrefTreeArgument
+                        {
+                            Verb = Verb.Put,
+                            Url = "https://inventor-io-samples.s3.us-west-2.amazonaws.com/holecep/bom/bomRows.json?AWSAccessKeyId=AKIAINFJUJXZQ3REAW2A&Expires=1582975080&Signature=wTGEsiFEsmAbQLRHXzwg2SkC6gs%3D"
+                        }
+                    }
+            };
         }
     }
 }

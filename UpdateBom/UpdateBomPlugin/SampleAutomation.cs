@@ -21,7 +21,6 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Collections.Generic;
 
-using Inventor;
 using Autodesk.Forge.DesignAutomation.Inventor.Utils;
 
 using Newtonsoft.Json;
@@ -30,6 +29,8 @@ using File = System.IO.File;
 using Path = System.IO.Path;
 using Directory = System.IO.Directory;
 using Newtonsoft.Json.Linq;
+using Inventor;
+using System.IO;
 
 namespace UpdateBomPlugin
 {
@@ -37,72 +38,127 @@ namespace UpdateBomPlugin
     public class SampleAutomation
     {
         private readonly InventorServer inventorApplication;
+        private string currentDirectory;
 
         public SampleAutomation(InventorServer inventorApp)
         {
             inventorApplication = inventorApp;
+            currentDirectory = Directory.GetCurrentDirectory();
         }
 
-        public void Run(Document placeholder)
+        public void Run(Document doc, string documentName)
         {
-            // LogTrace("Run called with {0}", doc.DisplayName);
-
-            LogTrace("Running Update BOM...");
-            string currDir = Directory.GetCurrentDirectory();
-
-
-            // For local debugging
-            //string inputPath = System.IO.Path.Combine(currDir, @"../../inputFiles", "params.json");
-            //Dictionary<string, string> options = JsonConvert.DeserializeObject<Dictionary<string, string>>(System.IO.File.ReadAllText(inputPath));
-
-            Dictionary<string, string> options = JsonConvert.DeserializeObject<Dictionary<string, string>>(System.IO.File.ReadAllText("inputParams.json"));
-            string inputFile = options["inputFile"];
-            string projectFile = options["projectFile"];
-
-            string assemblyPath = Path.GetFullPath(Path.Combine(currDir, inputFile));
-            string fullProjectPath = Path.GetFullPath(Path.Combine(currDir, projectFile));
-
-            Console.WriteLine("fullProjectPath = " + fullProjectPath);
-
-            DesignProject dp = inventorApplication.DesignProjectManager.DesignProjects.AddExisting(fullProjectPath);
-            dp.Activate();
-
-            Console.WriteLine("assemblyPath = " + assemblyPath);
-            Document doc = inventorApplication.Documents.Open(assemblyPath);
-
-            using (new HeartBeat())
-            {
-                GetBom(doc);
-            }
+            LogTrace("Run ...");
+           
+            //Local Debug
+            NameValueMap map = inventorApplication.TransientObjects.CreateNameValueMap();
+            map.Add("_1", documentName);
+            RunWithArguments(doc, map);
         }
 
         public void RunWithArguments(Document doc, NameValueMap map)
         {
-            LogTrace("RunWithArguments not implemented");
+            LogTrace("RunWithArguments ...");
+            
+            using (new HeartBeat())
+            {
+                string documentName = map.Value["_1"].ToString();
+
+                // find location of IPJ file
+                string projectFile = FindFileOnCurrentDirectoryPath(documentName + ".ipj");
+                LogTrace("Start processing this parameter: " + projectFile);
+
+                if (string.IsNullOrEmpty(projectFile))
+                    return;
+
+                // we need to activate Inventor Project first to get an Assembly ready for BOM
+                if (!ActivateInventorProject(projectFile))
+                    return;
+
+                // Find location of the Assembly open it
+                string documentPath = FindFileOnCurrentDirectoryPath(documentName + ".iam");
+                if ((doc = inventorApplication.Documents.Open(documentPath)) == null)
+                    return;
+
+                // Generate BOM with BOMViewTypeEnum
+                GetBom(doc, BOMViewTypeEnum.kStructuredBOMViewType);
+            }
         }
 
-        public void GetBom(Document doc)
+        /// <summary>
+        /// Activate Inventor Project
+        /// </summary>
+        /// <param name="projectName"></param>
+        /// <returns></returns>
+        public bool ActivateInventorProject(string projectName)
         {
             try
             {
+                //string currentDirectory = Directory.GetCurrentDirectory();
+                string fullProjectPath = Path.GetFullPath(Path.Combine(currentDirectory, projectName));
+                DesignProject project = inventorApplication.DesignProjectManager.DesignProjects.AddExisting(fullProjectPath);
+                project.Activate();
+            }
+            catch (Exception ex)
+            {
+                LogTrace(ex.ToString());
+                return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// it create a JSON file with BOM Data
+        /// </summary>
+        /// <param name="doc"></param>
+        /// <param name="eBomViewType"></param>
+        public void GetBom(Document doc, BOMViewTypeEnum eBomViewType)
+        {
+            doc.Update(); 
+
+            try
+            {
+                string viewType = "Structured";
                 AssemblyDocument assemblyDoc = doc as AssemblyDocument;
                 AssemblyComponentDefinition componentDef = assemblyDoc.ComponentDefinition;
+
+                LogTrace("Create BOM Object");
                 BOM bom = componentDef.BOM;
+
+                if (eBomViewType == BOMViewTypeEnum.kStructuredBOMViewType)
+                {
+                    bom.StructuredViewEnabled = true;
+                    bom.StructuredViewFirstLevelOnly = false;
+                }
+                else
+                {
+                    bom.PartsOnlyViewEnabled = true;
+                    viewType = "Parts Only";
+                }
+
+                LogTrace("Create BOM Views");
                 BOMViews bomViews = bom.BOMViews;
-                BOMView structureView = bomViews["Structured"];
+
+                LogTrace("Create BOM View");
+                BOMView structureView = bomViews[viewType];
 
                 JArray bomRows = new JArray();
+
+                LogTrace("Get BOM Rows to Json");
+                BOMRowsEnumerator rows = structureView.BOMRows;
+                
+                LogTrace("Start to generate BOM data ...");
                 GetBomRowProperties(structureView.BOMRows, bomRows);
 
                 LogTrace("Writing out bomRows.json");
-                File.WriteAllText("bomRows.json", bomRows.ToString());
-
+                File.WriteAllText(currentDirectory + "/bomRows.json", bomRows.ToString());
+                GetListOfDirectory(currentDirectory);
             }
             catch (Exception e)
             {
                 LogError("Bom failed: " + e.ToString());
             }
-        
         }
 
         public void GetBomRowProperties(BOMRowsEnumerator rows, JArray bomRows)
@@ -125,6 +181,7 @@ namespace UpdateBomPlugin
                     new JProperty("material", material.Value)
                     );
 
+                // LogTrace("Add BOM Row #" + row.ItemNumber); 
                 bomRows.Add(bomRow);
 
                 // iterate through child rows
@@ -134,8 +191,9 @@ namespace UpdateBomPlugin
                 }
             }
         }
+        #region Logging utilities
 
-        static void DirPrint(string sDir)
+        private void DirPrint(string sDir)
         {
             try
             {
@@ -154,7 +212,46 @@ namespace UpdateBomPlugin
             }
         }
 
-        #region Logging utilities
+        /// <summary>
+        /// Find a file on Current Directory and in all Subdirectories
+        /// </summary>
+        /// <param name="fileName"></param>
+        /// <param name="extension"></param>
+        /// <returns></returns>
+        private string FindFileOnCurrentDirectoryPath (string fileName, string extension = "*.*")
+        {
+            string ret = "";
+            
+            string[] files = Directory.GetFiles(Directory.GetCurrentDirectory(), extension, SearchOption.AllDirectories);
+            foreach (string s in files)
+            {
+                if (s.Contains(fileName))
+                    return s;
+            }
+
+            return ret;
+        }
+
+        /// <summary>
+        /// List all items on a path
+        /// </summary>
+        /// <param name="dirPath"></param>
+        private void GetListOfDirectory(string dirPath)
+        {
+            string[] directories = System.IO.Directory.GetDirectories(dirPath);
+            string[] files = System.IO.Directory.GetFiles(dirPath);
+            LogTrace(" List Of Directory : " + dirPath);
+            foreach (string directory in directories)
+            {
+                LogTrace("Dir: " + directory);
+            }
+
+            foreach (string file in files)
+            {
+                LogTrace("File: " + file);
+            }
+            LogTrace("-----------------------------------------------------------");
+        }
 
         /// <summary>
         /// Log message with 'trace' log level.

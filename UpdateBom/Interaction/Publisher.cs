@@ -68,12 +68,12 @@ namespace Interaction
             var response = await Client.AppBundlesApi.GetAppBundleAsync(shortAppBundleId, throwOnError: false);
             if (response.HttpResponse.StatusCode == HttpStatusCode.NotFound) // create new bundle
             {
-                await Client.CreateAppBundleAsync(Constants.Bundle.Definition, Constants.Bundle.Label, PackagePathname);
+                await Client.CreateAppBundleAsync(Constants.Bundle.appBundle, Constants.Bundle.Label, PackagePathname);
                 Console.WriteLine("Created new app bundle.");
             }
             else // create new bundle version
             {
-                var version = await Client.UpdateAppBundleAsync(Constants.Bundle.Definition, Constants.Bundle.Label, PackagePathname);
+                var version = await Client.UpdateAppBundleAsync(Constants.Bundle.appBundle, Constants.Bundle.Label, PackagePathname);
                 Console.WriteLine($"Created version #{version} for '{shortAppBundleId}' app bundle.");
             }
         }
@@ -176,6 +176,40 @@ namespace Interaction
             };
 
             return new ForgeService(new HttpClient(httpMessageHandler));
+        }
+
+        public async Task CleanExistingAppActivityAsync()
+        {
+            var bundleId = Constants.Bundle.Id;
+            var activityId = Constants.Activity.Id;
+            var shortAppBundleId = $"{bundleId}+{Constants.Bundle.Label}";
+
+
+            //check app bundle exists already
+            var appResponse = await Client.AppBundlesApi.GetAppBundleAsync(shortAppBundleId, throwOnError: false);
+            if (appResponse.HttpResponse.StatusCode == HttpStatusCode.OK)
+            {
+                //remove exsited app bundle 
+                Console.WriteLine($"Removing existing app bundle. Deleting {bundleId}...");
+                await Client.AppBundlesApi.DeleteAppBundleAsync(bundleId);
+            }
+            else
+            {
+                Console.WriteLine($"The app bundle {bundleId} does not exist.");
+            }
+
+            //check activity exists already
+            var activityResponse = await Client.ActivitiesApi.GetActivityAsync(await GetFullActivityId(), throwOnError: false);
+            if (activityResponse.HttpResponse.StatusCode == HttpStatusCode.OK)
+            {
+                //remove exsited activity
+                Console.WriteLine($"Removing existing activity. Deleting {activityId}...");
+                await Client.ActivitiesApi.DeleteActivityAsync(activityId);
+            }
+            else
+            {
+                Console.WriteLine($"The activity {activityId} does not exist.");
+            }
         }
     }
 }
